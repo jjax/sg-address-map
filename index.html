@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>シンガポール 登録住所マップ</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        }
+        
+        /* ログイン画面 */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .login-box h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .login-box .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .login-box input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            transition: border-color 0.2s;
+        }
+        .login-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .login-box button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .login-error {
+            color: #e53935;
+            font-size: 14px;
+            margin-top: 15px;
+            display: none;
+        }
+        .login-box .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none !important;
+        }
+        
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 350px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .info-panel h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .info-panel p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s;
+        }
+        .stats {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        
+        /* 設定パネル */
+        .config-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .config-section label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .config-section textarea {
+            width: 100%;
+            height: 80px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: monospace;
+            margin-bottom: 8px;
+            resize: vertical;
+        }
+        .config-section textarea:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+        .load-btn {
+            width: 100%;
+            padding: 12px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .load-btn:hover {
+            background: #1976D2;
+        }
+        .load-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* LP切り替えUI */
+        .lp-toggle {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .lp-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .lp-btn:hover {
+            border-color: #aaa;
+        }
+        .lp-btn.active {
+            border-color: #2196F3;
+            background: #E3F2FD;
+            color: #1976D2;
+        }
+        .lp-btn.jp.active {
+            border-color: #E53935;
+            background: #FFEBEE;
+            color: #C62828;
+        }
+        .lp-btn.en.active {
+            border-color: #1976D2;
+            background: #E3F2FD;
+            color: #1565C0;
+        }
+        .lp-btn.both.active {
+            border-color: #7B1FA2;
+            background: #F3E5F5;
+            color: #6A1B9A;
+        }
+        .lp-btn .count {
+            display: block;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+        .legend-color.jp {
+            background: #E53935;
+        }
+        .legend-color.en {
+            background: #1976D2;
+        }
+        
+        .leaflet-popup-content {
+            font-size: 13px;
+        }
+        .popup-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .popup-name.jp {
+            color: #E53935;
+        }
+        .popup-name.en {
+            color: #1976D2;
+        }
+        .popup-address {
+            color: #666;
+        }
+        .popup-source {
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px solid #eee;
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .status-message {
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .status-message.loading {
+            background: #FFF3E0;
+            color: #E65100;
+        }
+        .status-message.success {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+        .status-message.error {
+            background: #FFEBEE;
+            color: #C62828;
+        }
+        
+        .help-text {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+            line-height: 1.4;
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .tab-container {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 10px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: #eee;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab-btn.active {
+            background: #2196F3;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- ログイン画面 -->
+    <div class="login-overlay" id="login-overlay">
+        <div class="login-box">
+            <div class="logo">🗺️</div>
+            <h2>登録住所マップ</h2>
+            <p class="subtitle">社内限定ツール</p>
+            <input type="password" id="password-input" placeholder="パスワードを入力" onkeypress="if(event.key==='Enter')checkPassword()">
+            <button onclick="checkPassword()">ログイン</button>
+            <p class="login-error" id="login-error">パスワードが正しくありません</p>
+        </div>
+    </div>
+    
+    <!-- メインコンテンツ -->
+    <div id="main-content" class="hidden">
+        <div id="map"></div>
+        <div class="info-panel">
+        <h3>📍 登録住所マップ</h3>
+        
+        <!-- データ入力タブ -->
+        <div class="tab-container">
+            <button class="tab-btn active" onclick="switchTab('paste')">📋 コピペ入力</button>
+            <button class="tab-btn" onclick="switchTab('url')">🔗 URL入力</button>
+        </div>
+        
+        <!-- コピペ入力タブ -->
+        <div class="tab-content active" id="tab-paste">
+            <div class="config-section">
+                <label>🇯🇵 日本語LP データ（スプシからコピペ）</label>
+                <textarea id="jp-data" placeholder="スプレッドシートでA列〜E列を選択してコピー、ここに貼り付け&#10;&#10;郵便番号	通り名・番地	建物名	First Name	Last Name&#10;123456	1 Sample Road	#01-01	Taro	Yamada"></textarea>
+                
+                <label>🇬🇧 英語LP データ（スプシからコピペ）</label>
+                <textarea id="en-data" placeholder="スプレッドシートでA列〜E列を選択してコピー、ここに貼り付け"></textarea>
+                
+                <button class="load-btn" id="load-paste-btn" onclick="loadFromPaste()">
+                    📥 貼り付けデータを読み込み
+                </button>
+                
+                <div class="help-text">
+                    <strong>手順：</strong><br>
+                    1. スプレッドシートでA〜E列（郵便番号〜Last Name）を選択<br>
+                    2. Ctrl+C（Mac: ⌘+C）でコピー<br>
+                    3. 上のテキストエリアに Ctrl+V（Mac: ⌘+V）で貼り付け<br>
+                    4.「読み込み」ボタンをクリック
+                </div>
+            </div>
+        </div>
+        
+        <!-- URL入力タブ -->
+        <div class="tab-content" id="tab-url">
+            <div class="config-section">
+                <label>🇯🇵 日本語LP スプレッドシートURL</label>
+                <textarea id="jp-url" style="height: 40px;" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/..."></textarea>
+                
+                <label>🇬🇧 英語LP スプレッドシートURL</label>
+                <textarea id="en-url" style="height: 40px;" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/..."></textarea>
+                
+                <button class="load-btn" onclick="loadFromUrl()">
+                    📥 URLから読み込み
+                </button>
+                
+                <div class="help-text">
+                    ※ スプレッドシートを「ウェブに公開」する必要があります<br>
+                    ファイル → 共有 → ウェブに公開 → リンク
+                </div>
+            </div>
+        </div>
+        
+        <!-- LP切り替えUI -->
+        <div class="lp-toggle" id="lp-toggle" style="display: none;">
+            <button class="lp-btn jp active" onclick="toggleLP('jp')">
+                🇯🇵 日本語
+                <span class="count" id="jp-count">-</span>
+            </button>
+            <button class="lp-btn en" onclick="toggleLP('en')">
+                🇬🇧 英語
+                <span class="count" id="en-count">-</span>
+            </button>
+            <button class="lp-btn both" onclick="toggleLP('both')">
+                両方
+                <span class="count" id="both-count">-</span>
+            </button>
+        </div>
+        
+        <div id="progress-section" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress" style="width: 0%"></div>
+            </div>
+            <div class="stats">
+                <p>処理済み: <span id="processed">0</span> / <span id="total">0</span></p>
+                <p>成功: <span id="success" style="color: green">0</span></p>
+                <p>失敗: <span id="failed" style="color: red">0</span></p>
+            </div>
+        </div>
+        
+        <div id="status-container"></div>
+    </div>
+    
+    <div class="legend" id="legend" style="display: none;">
+        <div class="legend-item">
+            <div class="legend-color jp"></div>
+            <span>日本語LP経由</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color en"></div>
+            <span>英語LP経由</span>
+        </div>
+    </div>
+    </div><!-- /main-content -->
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script>
+        // ============================================
+        // パスワード保護（SHA-256ハッシュ化）
+        // ============================================
+        // パスワードのハッシュ値のみを保存（平文は保存しない）
+        const PASSWORD_HASH = 'da7f5b4b20a340aeeb5abce1d8884c2c94e4de70ea1f841f7e876afc6d938adc';
+        const SALT = 'tsuklio_salt_2026';
+        
+        // SHA-256ハッシュ関数
+        async function hashPassword(password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(password + SALT);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        
+        // パスワードチェック
+        async function checkPassword() {
+            const input = document.getElementById('password-input').value;
+            const hash = await hashPassword(input);
+            
+            if (hash === PASSWORD_HASH) {
+                // ログイン成功
+                sessionStorage.setItem('auth', 'true');
+                document.getElementById('login-overlay').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                initMap();
+            } else {
+                // ログイン失敗
+                document.getElementById('login-error').style.display = 'block';
+                document.getElementById('password-input').value = '';
+            }
+        }
+        
+        // セッション確認
+        function checkSession() {
+            if (sessionStorage.getItem('auth') === 'true') {
+                document.getElementById('login-overlay').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                initMap();
+            }
+        }
+        
+        // ページ読み込み時にセッション確認
+        checkSession();
+        
+        // ============================================
+        // マップ初期化
+        // ============================================
+        let map;
+        let mapInitialized = false;
+        
+        function initMap() {
+            if (mapInitialized) return;
+            mapInitialized = true;
+            
+            // シンガポールの中心座標
+            map = L.map('map').setView([1.3521, 103.8198], 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // マーカークラスター
+        let jpMarkers = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            iconCreateFunction: function(cluster) {
+                return L.divIcon({
+                    html: '<div style="background:#E53935;color:white;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + cluster.getChildCount() + '</div>',
+                    className: 'marker-cluster-jp',
+                    iconSize: L.point(40, 40)
+                });
+            }
+        });
+        
+        let enMarkers = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            iconCreateFunction: function(cluster) {
+                return L.divIcon({
+                    html: '<div style="background:#1976D2;color:white;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + cluster.getChildCount() + '</div>',
+                    className: 'marker-cluster-en',
+                    iconSize: L.point(40, 40)
+                });
+            }
+        });
+
+        // データ
+        let jpAddresses = [];
+        let enAddresses = [];
+        let currentMode = 'jp';
+        let processed = 0, success = 0, failed = 0, total = 0;
+
+        // タブ切り替え
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector(`#tab-${tabId}`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // ステータス表示
+        function showStatus(message, type) {
+            const container = document.getElementById('status-container');
+            container.innerHTML = `<div class="status-message ${type}">${message}</div>`;
+        }
+
+        // タブ区切りテキストをパース（スプレッドシートからのコピペ）
+        function parseTSV(text) {
+            const lines = text.trim().split('\n');
+            const addresses = [];
+            const seen = new Set();
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                // タブ区切りで分割
+                const cols = line.split('\t');
+                
+                // ヘッダー行をスキップ
+                if (cols[0] === '郵便番号' || cols[0].toLowerCase() === 'postal') continue;
+                
+                let postal = (cols[0] || '').trim();
+                const street = (cols[1] || '').trim();
+                const building = (cols[2] || '').trim();
+                const firstName = (cols[3] || '').trim();
+                const lastName = (cols[4] || '').trim();
+                
+                // 郵便番号を正規化
+                if (postal) {
+                    try {
+                        postal = String(parseInt(postal)).padStart(6, '0');
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                
+                // 重複・無効データチェック
+                if (!postal || seen.has(postal)) continue;
+                if (street.includes('00:00:00') || building.includes('00:00:00')) continue;
+                if (!street || street === 'nan' || street === 'NaN') continue;
+                
+                let address = street;
+                if (building && building !== 'nan' && building !== 'NaN') {
+                    address = `${street}, ${building}`;
+                }
+                
+                const name = `${firstName} ${lastName}`.trim();
+                
+                seen.add(postal);
+                addresses.push({ postal, address, name });
+            }
+            
+            return addresses;
+        }
+
+        // コピペデータから読み込み
+        async function loadFromPaste() {
+            const jpData = document.getElementById('jp-data').value.trim();
+            const enData = document.getElementById('en-data').value.trim();
+            
+            if (!jpData && !enData) {
+                showStatus('少なくとも1つのデータを貼り付けてください', 'error');
+                return;
+            }
+            
+            const loadBtn = document.getElementById('load-paste-btn');
+            loadBtn.disabled = true;
+            loadBtn.textContent = '読み込み中...';
+            
+            // マーカーをクリア
+            jpMarkers.clearLayers();
+            enMarkers.clearLayers();
+            map.removeLayer(jpMarkers);
+            map.removeLayer(enMarkers);
+            
+            jpAddresses = [];
+            enAddresses = [];
+            
+            try {
+                if (jpData) {
+                    jpAddresses = parseTSV(jpData);
+                    showStatus(`🇯🇵 日本語LP: ${jpAddresses.length}件のユニーク住所を検出`, 'success');
+                }
+                
+                if (enData) {
+                    enAddresses = parseTSV(enData);
+                    showStatus(`🇬🇧 英語LP: ${enAddresses.length}件のユニーク住所を検出`, 'success');
+                }
+                
+                if (jpAddresses.length === 0 && enAddresses.length === 0) {
+                    showStatus('有効な住所データが見つかりませんでした', 'error');
+                    loadBtn.disabled = false;
+                    loadBtn.textContent = '📥 貼り付けデータを読み込み';
+                    return;
+                }
+                
+                // UIを表示
+                document.getElementById('lp-toggle').style.display = 'flex';
+                document.getElementById('progress-section').style.display = 'block';
+                document.getElementById('legend').style.display = 'block';
+                
+                // カウント更新
+                document.getElementById('jp-count').textContent = jpAddresses.length;
+                document.getElementById('en-count').textContent = enAddresses.length;
+                document.getElementById('both-count').textContent = jpAddresses.length + enAddresses.length;
+                
+                // ジオコーディング開始
+                showStatus('📍 住所をジオコーディング中...', 'loading');
+                await processAddresses();
+                
+                showStatus('✅ 完了しました', 'success');
+                
+            } catch (error) {
+                showStatus(`❌ エラー: ${error.message}`, 'error');
+                console.error(error);
+            }
+            
+            loadBtn.disabled = false;
+            loadBtn.textContent = '📥 貼り付けデータを読み込み';
+        }
+
+        // URL読み込み（ウェブ公開されている場合のみ）
+        async function loadFromUrl() {
+            const jpUrl = document.getElementById('jp-url').value.trim();
+            const enUrl = document.getElementById('en-url').value.trim();
+            
+            if (!jpUrl && !enUrl) {
+                showStatus('少なくとも1つのURLを入力してください', 'error');
+                return;
+            }
+            
+            showStatus('URLからの読み込みには「ウェブに公開」が必要です。コピペ入力をお試しください。', 'error');
+        }
+
+        // カスタムマーカーアイコン
+        function createMarkerIcon(isEnglish) {
+            return L.divIcon({
+                html: `<div style="background:${isEnglish ? '#1976D2' : '#E53935'};width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>`,
+                className: 'custom-marker-icon',
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+        }
+
+        // ジオコーディング
+        async function geocodeAddress(item) {
+            try {
+                const response = await fetch(
+                    `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${encodeURIComponent(item.postal)}&returnGeom=Y&getAddrDetails=Y&pageNum=1`
+                );
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const result = data.results[0];
+                    return {
+                        lat: parseFloat(result.LATITUDE),
+                        lng: parseFloat(result.LONGITUDE),
+                        foundAddress: result.ADDRESS
+                    };
+                }
+                
+                // フォールバック: 住所で検索
+                const response2 = await fetch(
+                    `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${encodeURIComponent(item.address)}&returnGeom=Y&getAddrDetails=Y&pageNum=1`
+                );
+                const data2 = await response2.json();
+                
+                if (data2.results && data2.results.length > 0) {
+                    const result = data2.results[0];
+                    return {
+                        lat: parseFloat(result.LATITUDE),
+                        lng: parseFloat(result.LONGITUDE),
+                        foundAddress: result.ADDRESS
+                    };
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                return null;
+            }
+        }
+
+        // マーカー追加
+        function addMarker(lat, lng, item, foundAddress, isEnglish) {
+            const marker = L.marker([lat, lng], {
+                icon: createMarkerIcon(isEnglish)
+            });
+            
+            const sourceLabel = isEnglish ? '英語LP経由' : '日本語LP経由';
+            const nameClass = isEnglish ? 'en' : 'jp';
+            
+            marker.bindPopup(`
+                <div class="popup-name ${nameClass}">${item.name || '名前なし'}</div>
+                <div class="popup-address">
+                    <strong>住所:</strong> ${item.address}<br>
+                    <strong>郵便番号:</strong> ${item.postal}<br>
+                    ${foundAddress ? `<strong>検出:</strong> ${foundAddress}` : ''}
+                </div>
+                <div class="popup-source">📍 ${sourceLabel}</div>
+            `);
+            
+            if (isEnglish) {
+                enMarkers.addLayer(marker);
+            } else {
+                jpMarkers.addLayer(marker);
+            }
+        }
+
+        // 進捗更新
+        function updateProgress() {
+            processed++;
+            const percent = (processed / total) * 100;
+            document.getElementById('progress').style.width = percent + '%';
+            document.getElementById('processed').textContent = processed;
+            document.getElementById('success').textContent = success;
+            document.getElementById('failed').textContent = failed;
+        }
+
+        // LP切り替え
+        function toggleLP(mode) {
+            currentMode = mode;
+            
+            document.querySelectorAll('.lp-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.lp-btn.${mode}`).classList.add('active');
+            
+            if (mode === 'jp') {
+                map.addLayer(jpMarkers);
+                map.removeLayer(enMarkers);
+            } else if (mode === 'en') {
+                map.removeLayer(jpMarkers);
+                map.addLayer(enMarkers);
+            } else {
+                map.addLayer(jpMarkers);
+                map.addLayer(enMarkers);
+            }
+            
+            fitBoundsToCurrentMode();
+        }
+        
+        function fitBoundsToCurrentMode() {
+            let bounds;
+            if (currentMode === 'jp' && jpMarkers.getLayers().length > 0) {
+                bounds = jpMarkers.getBounds();
+            } else if (currentMode === 'en' && enMarkers.getLayers().length > 0) {
+                bounds = enMarkers.getBounds();
+            } else if (currentMode === 'both') {
+                const allLayers = [...jpMarkers.getLayers(), ...enMarkers.getLayers()];
+                if (allLayers.length > 0) {
+                    bounds = L.featureGroup(allLayers).getBounds();
+                }
+            }
+            
+            if (bounds && bounds.isValid()) {
+                map.fitBounds(bounds.pad(0.1));
+            }
+        }
+
+        // ジオコーディング処理
+        async function processAddresses() {
+            const allAddresses = [
+                ...jpAddresses.map(a => ({ ...a, isEnglish: false })),
+                ...enAddresses.map(a => ({ ...a, isEnglish: true }))
+            ];
+            
+            total = allAddresses.length;
+            processed = 0;
+            success = 0;
+            failed = 0;
+            
+            document.getElementById('total').textContent = total;
+            document.getElementById('processed').textContent = 0;
+            document.getElementById('success').textContent = 0;
+            document.getElementById('failed').textContent = 0;
+            document.getElementById('progress').style.width = '0%';
+            
+            for (const item of allAddresses) {
+                const result = await geocodeAddress(item);
+                
+                if (result) {
+                    addMarker(result.lat, result.lng, item, result.foundAddress, item.isEnglish);
+                    success++;
+                } else {
+                    failed++;
+                    console.log('Failed to geocode:', item);
+                }
+                
+                updateProgress();
+                
+                // API制限対策
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            // 初期表示
+            if (jpAddresses.length > 0) {
+                map.addLayer(jpMarkers);
+                currentMode = 'jp';
+            } else if (enAddresses.length > 0) {
+                map.addLayer(enMarkers);
+                currentMode = 'en';
+                document.querySelector('.lp-btn.jp').classList.remove('active');
+                document.querySelector('.lp-btn.en').classList.add('active');
+            }
+            
+            fitBoundsToCurrentMode();
+        }
+        
+        } // end initMap
+    </script>
+</body>
+</html>
