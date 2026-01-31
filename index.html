@@ -118,6 +118,7 @@
                 <label>🇬🇧 英語LP データ（スプシからコピペ）</label>
                 <textarea id="en-data" placeholder="スプレッドシートでA列〜E列を選択してコピー、ここに貼り付け"></textarea>
                 <button class="load-btn" id="load-btn" onclick="loadFromPaste()">📥 貼り付けデータを読み込み</button>
+                <button class="load-btn" style="background:#ff5722;margin-top:8px;" onclick="clearSavedData()">🗑️ 保存データをクリア</button>
                 <div class="help-text">
                     <strong>手順：</strong><br>
                     1. スプレッドシートでA〜E列（郵便番号〜Last Name）を選択<br>
@@ -214,7 +215,60 @@
                     iconSize: L.point(40, 40)
                 })
             });
+            
+            // 保存されたデータを復元
+            loadSavedData();
         }
+        
+        // データをlocalStorageに保存
+        function saveData() {
+            const data = { jp: jpGeocodedData, en: enGeocodedData, savedAt: new Date().toISOString() };
+            localStorage.setItem('addressMapData', JSON.stringify(data));
+        }
+        
+        // 保存されたデータを読み込み
+        function loadSavedData() {
+            const saved = localStorage.getItem('addressMapData');
+            if (!saved) return;
+            
+            try {
+                const data = JSON.parse(saved);
+                if (data.jp?.length || data.en?.length) {
+                    showStatus(`📂 保存データを復元中... (${new Date(data.savedAt).toLocaleString('ja-JP')} 保存)`, 'loading');
+                    
+                    jpGeocodedData = data.jp || [];
+                    enGeocodedData = data.en || [];
+                    
+                    // マーカーを復元
+                    jpGeocodedData.forEach(item => addMarker(item.lat, item.lng, item, item.foundAddress, false));
+                    enGeocodedData.forEach(item => addMarker(item.lat, item.lng, item, item.foundAddress, true));
+                    
+                    // UI更新
+                    document.getElementById('lp-toggle').style.display = 'flex';
+                    document.getElementById('legend').style.display = 'block';
+                    document.getElementById('jp-count').textContent = jpGeocodedData.length;
+                    document.getElementById('en-count').textContent = enGeocodedData.length;
+                    document.getElementById('both-count').textContent = jpGeocodedData.length + enGeocodedData.length;
+                    
+                    if (jpGeocodedData.length) { map.addLayer(jpMarkers); currentMode = 'jp'; }
+                    else if (enGeocodedData.length) { map.addLayer(enMarkers); currentMode = 'en'; }
+                    fitBounds();
+                    
+                    showStatus(`✅ ${jpGeocodedData.length + enGeocodedData.length}件のデータを復元しました`, 'success');
+                }
+            } catch (e) { console.error('Failed to load saved data:', e); }
+        }
+        
+        // データクリア
+        function clearSavedData() {
+            if (confirm('保存されたデータを削除しますか？')) {
+                localStorage.removeItem('addressMapData');
+                location.reload();
+            }
+        }
+        
+        // ジオコーディング済みデータ
+        let jpGeocodedData = [], enGeocodedData = [];
         
         function showStatus(message, type) {
             document.getElementById('status-container').innerHTML = `<div class="status-message ${type}">${message}</div>`;
@@ -338,19 +392,34 @@
         async function processAddresses() {
             const all = [...jpAddresses.map(a => ({...a, isEnglish: false})), ...enAddresses.map(a => ({...a, isEnglish: true}))];
             total = all.length; processed = success = failed = 0;
+            jpGeocodedData = []; enGeocodedData = [];
             document.getElementById('total').textContent = total;
             document.getElementById('progress').style.width = '0%';
             
             for (const item of all) {
                 const result = await geocodeAddress(item);
-                if (result) { addMarker(result.lat, result.lng, item, result.foundAddress, item.isEnglish); success++; }
-                else { failed++; }
+                if (result) {
+                    addMarker(result.lat, result.lng, item, result.foundAddress, item.isEnglish);
+                    // ジオコーディング結果を保存用に記録
+                    const geoData = { ...item, lat: result.lat, lng: result.lng, foundAddress: result.foundAddress };
+                    if (item.isEnglish) enGeocodedData.push(geoData);
+                    else jpGeocodedData.push(geoData);
+                    success++;
+                } else { failed++; }
                 updateProgress();
                 await new Promise(r => setTimeout(r, 50));
             }
             
-            if (jpAddresses.length) { map.addLayer(jpMarkers); currentMode = 'jp'; }
-            else if (enAddresses.length) { map.addLayer(enMarkers); currentMode = 'en'; document.querySelector('.lp-btn.jp').classList.remove('active'); document.querySelector('.lp-btn.en').classList.add('active'); }
+            // localStorageに保存
+            saveData();
+            
+            // カウント更新
+            document.getElementById('jp-count').textContent = jpGeocodedData.length;
+            document.getElementById('en-count').textContent = enGeocodedData.length;
+            document.getElementById('both-count').textContent = jpGeocodedData.length + enGeocodedData.length;
+            
+            if (jpGeocodedData.length) { map.addLayer(jpMarkers); currentMode = 'jp'; }
+            else if (enGeocodedData.length) { map.addLayer(enMarkers); currentMode = 'en'; document.querySelector('.lp-btn.jp').classList.remove('active'); document.querySelector('.lp-btn.en').classList.add('active'); }
             fitBounds();
         }
         
